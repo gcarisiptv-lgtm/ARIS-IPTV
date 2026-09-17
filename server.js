@@ -4,14 +4,14 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// ===============================
+// ==========================================
 // CONFIGURATION
-// ===============================
+// ==========================================
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Autoriser les requêtes depuis l'application Android
+// CORS
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header(
@@ -30,15 +30,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// ===============================
+// ==========================================
 // FICHIERS WEB
-// ===============================
+// ==========================================
 
 app.use(express.static(path.join(__dirname)));
 
-// ===============================
+// ==========================================
 // DONNÉES TEMPORAIRES
-// ===============================
+// ==========================================
 
 const users = [
   {
@@ -59,9 +59,9 @@ const activationCodes = [
 
 const devices = [];
 
-// ===============================
-// ROUTE PRINCIPALE
-// ===============================
+// ==========================================
+// PAGE PRINCIPALE
+// ==========================================
 
 app.get("/", (req, res) => {
   const indexPath = path.join(__dirname, "index.html");
@@ -75,6 +75,7 @@ app.get("/", (req, res) => {
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>ARIS IPTV</title>
+
           <style>
             body {
               margin: 0;
@@ -85,21 +86,23 @@ app.get("/", (req, res) => {
             }
 
             .box {
-              max-width: 600px;
+              max-width: 700px;
               margin: 100px auto;
               padding: 40px;
             }
 
             h1 {
               font-size: 42px;
-              margin-bottom: 10px;
+              margin-bottom: 15px;
             }
 
             p {
               color: #b9c3d0;
+              font-size: 18px;
             }
           </style>
         </head>
+
         <body>
           <div class="box">
             <h1>ARIS IPTV</h1>
@@ -113,9 +116,9 @@ app.get("/", (req, res) => {
   });
 });
 
-// ===============================
-// TEST API
-// ===============================
+// ==========================================
+// API PRINCIPALE
+// ==========================================
 
 app.get("/api", (req, res) => {
   res.json({
@@ -126,22 +129,36 @@ app.get("/api", (req, res) => {
   });
 });
 
-// ===============================
+// ==========================================
+// HEALTH CHECK
+// ==========================================
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    success: true,
+    service: "ARIS IPTV",
+    status: "online",
+    message: "Backend accessible",
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ==========================================
 // STATUT DU SERVEUR
-// ===============================
+// ==========================================
 
 app.get("/api/status", (req, res) => {
   res.json({
     success: true,
     status: "online",
     server: "ARIS IPTV PRO",
-    time: new Date().toISOString()
+    timestamp: new Date().toISOString()
   });
 });
 
-// ===============================
+// ==========================================
 // CONNEXION UTILISATEUR
-// ===============================
+// ==========================================
 
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body;
@@ -177,9 +194,9 @@ app.post("/api/login", (req, res) => {
   });
 });
 
-// ===============================
+// ==========================================
 // ACTIVATION PAR CODE
-// ===============================
+// ==========================================
 
 app.post("/api/activate", (req, res) => {
   const { code, deviceId } = req.body;
@@ -192,7 +209,9 @@ app.post("/api/activate", (req, res) => {
   }
 
   const activation = activationCodes.find(
-    (item) => item.code === code && item.active === true
+    (item) =>
+      item.code === code &&
+      item.active === true
   );
 
   if (!activation) {
@@ -202,7 +221,10 @@ app.post("/api/activate", (req, res) => {
     });
   }
 
-  if (activation.device && activation.device !== deviceId) {
+  if (
+    activation.device &&
+    activation.device !== deviceId
+  ) {
     return res.status(403).json({
       success: false,
       message: "Ce code est déjà utilisé sur un autre appareil"
@@ -213,7 +235,8 @@ app.post("/api/activate", (req, res) => {
     activation.device = deviceId;
 
     const existingDevice = devices.find(
-      (device) => device.deviceId === deviceId
+      (device) =>
+        device.deviceId === deviceId
     );
 
     if (!existingDevice) {
@@ -234,15 +257,17 @@ app.post("/api/activate", (req, res) => {
   });
 });
 
-// ===============================
+// ==========================================
 // VÉRIFICATION DU CODE
-// ===============================
+// ==========================================
 
 app.post("/api/check-code", (req, res) => {
   const { code } = req.body;
 
   const activation = activationCodes.find(
-    (item) => item.code === code && item.active === true
+    (item) =>
+      item.code === code &&
+      item.active === true
   );
 
   if (!activation) {
@@ -260,9 +285,9 @@ app.post("/api/check-code", (req, res) => {
   });
 });
 
-// ===============================
+// ==========================================
 // LISTE DES UTILISATEURS
-// ===============================
+// ==========================================
 
 app.get("/api/users", (req, res) => {
   res.json({
@@ -275,9 +300,9 @@ app.get("/api/users", (req, res) => {
   });
 });
 
-// ===============================
+// ==========================================
 // AJOUT UTILISATEUR
-// ===============================
+// ==========================================
 
 app.post("/api/users", (req, res) => {
   const { username, password } = req.body;
@@ -289,7 +314,10 @@ app.post("/api/users", (req, res) => {
     });
   }
 
-  const existing = users.find((user) => user.username === username);
+  const existing = users.find(
+    (user) =>
+      user.username === username
+  );
 
   if (existing) {
     return res.status(409).json({
@@ -300,8 +328,8 @@ app.post("/api/users", (req, res) => {
 
   const newUser = {
     id: users.length + 1,
-    username,
-    password,
+    username: username,
+    password: password,
     active: true
   };
 
@@ -318,9 +346,9 @@ app.post("/api/users", (req, res) => {
   });
 });
 
-// ===============================
+// ==========================================
 // LISTE DES CODES
-// ===============================
+// ==========================================
 
 app.get("/api/codes", (req, res) => {
   res.json({
@@ -329,9 +357,9 @@ app.get("/api/codes", (req, res) => {
   });
 });
 
-// ===============================
+// ==========================================
 // CRÉER UN CODE
-// ===============================
+// ==========================================
 
 app.post("/api/codes", (req, res) => {
   const { code } = req.body;
@@ -344,7 +372,8 @@ app.post("/api/codes", (req, res) => {
   }
 
   const existing = activationCodes.find(
-    (item) => item.code === code
+    (item) =>
+      item.code === code
   );
 
   if (existing) {
@@ -355,7 +384,7 @@ app.post("/api/codes", (req, res) => {
   }
 
   activationCodes.push({
-    code,
+    code: code,
     active: true,
     device: null
   });
@@ -363,30 +392,31 @@ app.post("/api/codes", (req, res) => {
   res.json({
     success: true,
     message: "Code créé avec succès",
-    code
+    code: code
   });
 });
 
-// ===============================
+// ==========================================
 // LISTE DES APPAREILS
-// ===============================
+// ==========================================
 
 app.get("/api/devices", (req, res) => {
   res.json({
     success: true,
-    devices
+    devices: devices
   });
 });
 
-// ===============================
+// ==========================================
 // DÉSACTIVER UN APPAREIL
-// ===============================
+// ==========================================
 
 app.post("/api/devices/deactivate", (req, res) => {
   const { deviceId } = req.body;
 
   const device = devices.find(
-    (item) => item.deviceId === deviceId
+    (item) =>
+      item.deviceId === deviceId
   );
 
   if (!device) {
@@ -404,17 +434,22 @@ app.post("/api/devices/deactivate", (req, res) => {
   });
 });
 
-// ===============================
+// ==========================================
 // PAGE ADMIN
-// ===============================
+// ==========================================
 
 app.get("/admin", (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html lang="fr">
+
     <head>
       <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+      <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+      >
 
       <title>ARIS IPTV - Administration</title>
 
@@ -432,7 +467,7 @@ app.get("/admin", (req, res) => {
           background: #0d1b2a;
         }
 
-        h1 {
+        header h1 {
           margin: 0;
         }
 
@@ -442,15 +477,28 @@ app.get("/admin", (req, res) => {
           padding: 20px;
         }
 
+        .cards {
+          display: grid;
+          grid-template-columns:
+            repeat(auto-fit, minmax(220px, 1fr));
+          gap: 20px;
+        }
+
         .card {
           background: #102235;
           padding: 25px;
-          margin-bottom: 20px;
           border-radius: 12px;
+          box-shadow:
+            0 4px 20px rgba(0,0,0,0.25);
         }
 
         .number {
           font-size: 32px;
+          font-weight: bold;
+        }
+
+        .online {
+          color: #36d399;
           font-weight: bold;
         }
       </style>
@@ -465,36 +513,49 @@ app.get("/admin", (req, res) => {
 
       <div class="container">
 
-        <div class="card">
-          <h2>Utilisateurs</h2>
-          <div class="number">${users.length}</div>
-        </div>
+        <div class="cards">
 
-        <div class="card">
-          <h2>Codes d'activation</h2>
-          <div class="number">${activationCodes.length}</div>
-        </div>
+          <div class="card">
+            <h2>Utilisateurs</h2>
+            <div class="number">
+              ${users.length}
+            </div>
+          </div>
 
-        <div class="card">
-          <h2>Appareils</h2>
-          <div class="number">${devices.length}</div>
-        </div>
+          <div class="card">
+            <h2>Codes d'activation</h2>
+            <div class="number">
+              ${activationCodes.length}
+            </div>
+          </div>
 
-        <div class="card">
-          <h2>État du serveur</h2>
-          <p>🟢 Serveur ARIS IPTV opérationnel</p>
+          <div class="card">
+            <h2>Appareils</h2>
+            <div class="number">
+              ${devices.length}
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Serveur</h2>
+            <p class="online">
+              ● ONLINE
+            </p>
+          </div>
+
         </div>
 
       </div>
 
     </body>
+
     </html>
   `);
 });
 
-// ===============================
+// ==========================================
 // GESTION DES ERREURS
-// ===============================
+// ==========================================
 
 app.use((err, req, res, next) => {
   console.error(err);
@@ -505,9 +566,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ===============================
+// ==========================================
 // ROUTE 404
-// ===============================
+// ==========================================
 
 app.use((req, res) => {
   res.status(404).json({
@@ -517,10 +578,12 @@ app.use((req, res) => {
   });
 });
 
-// ===============================
+// ==========================================
 // DÉMARRAGE DU SERVEUR
-// ===============================
+// ==========================================
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`ARIS IPTV API listening on port ${PORT}`);
+  console.log(
+    `ARIS IPTV API listening on port ${PORT}`
+  );
 });
