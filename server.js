@@ -1,18 +1,14 @@
 const express = require("express");
 const path = require("path");
+const crypto = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-
-// =====================================
-// CONFIGURATION
-// =====================================
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use(function (req, res, next) {
+app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header(
     "Access-Control-Allow-Headers",
@@ -32,20 +28,10 @@ app.use(function (req, res, next) {
 
 app.use(express.static(path.join(__dirname)));
 
-
-// =====================================
-// ADMIN TOKEN
-// =====================================
-
 const ADMIN_TOKEN =
   process.env.ADMIN_TOKEN || "ARIS-ADMIN-2026";
 
-
-// =====================================
-// UTILISATEURS
-// =====================================
-
-const users = [
+let users = [
   {
     id: 1,
     username: "admin",
@@ -54,50 +40,34 @@ const users = [
   }
 ];
 
-
-// =====================================
-// CODES D'ACTIVATION
-// =====================================
-
-const activationCodes = [
+let activationCodes = [
   {
+    id: 1,
     code: "ARIS-2026",
     active: true,
-    device: null,
-    createdAt: new Date().toISOString()
+    deviceId: null,
+    deviceName: null,
+    platform: null,
+    createdAt: new Date().toISOString(),
+    activatedAt: null
   }
 ];
 
-
-// =====================================
-// APPAREILS
-// =====================================
-
-const devices = [];
-
-
-// =====================================
-// AUTHENTIFICATION ADMIN
-// =====================================
+let devices = [];
 
 function adminAuth(req, res, next) {
-
-  const authorization =
-    req.headers.authorization || "";
+  const authorization = req.headers.authorization || "";
 
   if (!authorization.startsWith("Bearer ")) {
-
     return res.status(401).json({
       success: false,
       message: "Token admin manquant"
     });
   }
 
-  const token =
-    authorization.substring(7).trim();
+  const token = authorization.substring(7).trim();
 
   if (!token || token !== ADMIN_TOKEN) {
-
     return res.status(403).json({
       success: false,
       message: "Token admin invalide"
@@ -107,73 +77,65 @@ function adminAuth(req, res, next) {
   next();
 }
 
+function generateCode() {
+  const part1 = crypto.randomBytes(2).toString("hex").toUpperCase();
+  const part2 = crypto.randomBytes(2).toString("hex").toUpperCase();
+  const part3 = crypto.randomBytes(2).toString("hex").toUpperCase();
 
-// =====================================
-// PAGE PRINCIPALE
-// =====================================
+  return "ARIS-" + part1 + "-" + part2 + "-" + part3;
+}
 
-app.get("/", function (req, res) {
-
-  const indexPath =
-    path.join(__dirname, "index.html");
-
-  res.sendFile(indexPath, function (err) {
-
-    if (err) {
-
-      res.send(
-        "<!DOCTYPE html>" +
-        "<html lang='fr'>" +
-        "<head>" +
-        "<meta charset='UTF-8'>" +
-        "<meta name='viewport' content='width=device-width, initial-scale=1.0'>" +
-        "<title>ARIS IPTV</title>" +
-        "<style>" +
-        "body{margin:0;background:#07111f;color:white;font-family:Arial;text-align:center;}" +
-        ".box{max-width:700px;margin:100px auto;padding:40px;}" +
-        "h1{font-size:42px;}" +
-        "p{color:#b9c3d0;font-size:18px;}" +
-        "</style>" +
-        "</head>" +
-        "<body>" +
-        "<div class='box'>" +
-        "<h1>ARIS IPTV</h1>" +
-        "<p>Serveur API opérationnel</p>" +
-        "<p>ARIS IPTV PRO</p>" +
-        "</div>" +
-        "</body>" +
-        "</html>"
-      );
-
-    }
-
-  });
-
+app.get("/", (req, res) => {
+  res.send(`
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARIS IPTV</title>
+<style>
+body {
+  margin: 0;
+  background: #07111f;
+  color: white;
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
+.box {
+  max-width: 800px;
+  margin: 100px auto;
+  padding: 40px;
+}
+h1 {
+  font-size: 42px;
+}
+p {
+  color: #b9c3d0;
+  font-size: 18px;
+}
+</style>
+</head>
+<body>
+<div class="box">
+<h1>🦁 ARIS IPTV</h1>
+<p>Serveur ARIS IPTV opérationnel</p>
+<p>API : ONLINE</p>
+</div>
+</body>
+</html>
+  `);
 });
 
-
-// =====================================
-// API PRINCIPALE
-// =====================================
-
-app.get("/api", function (req, res) {
-
+app.get("/api", (req, res) => {
   res.json({
     success: true,
     name: "ARIS IPTV",
     message: "ARIS IPTV API fonctionne correctement",
     status: "online"
   });
-
 });
 
-
-// =====================================
-// HEALTH
-// =====================================
-
-app.get("/health", function (req, res) {
-
+app.get("/health", (req, res) => {
   res.json({
     success: true,
     service: "ARIS IPTV",
@@ -181,12 +143,9 @@ app.get("/health", function (req, res) {
     message: "Backend accessible",
     timestamp: new Date().toISOString()
   });
-
 });
 
-
-app.get("/api/health", function (req, res) {
-
+app.get("/api/health", (req, res) => {
   res.json({
     success: true,
     service: "ARIS IPTV",
@@ -194,1404 +153,1455 @@ app.get("/api/health", function (req, res) {
     message: "Backend accessible",
     timestamp: new Date().toISOString()
   });
-
 });
 
-
-// =====================================
-// STATUS
-// =====================================
-
-app.get("/api/status", function (req, res) {
-
+app.get("/api/status", (req, res) => {
   res.json({
     success: true,
     name: "ARIS IPTV",
     status: "online",
     timestamp: new Date().toISOString()
   });
-
 });
 
+/* =========================
+   LOGIN
+========================= */
 
-// =====================================
-// ADMIN OVERVIEW
-// =====================================
-
-app.get(
-  "/api/admin/overview",
-  adminAuth,
-  function (req, res) {
-
-    const activeUsers =
-      users.filter(function (user) {
-        return user.active;
-      }).length;
-
-    const activeCodes =
-      activationCodes.filter(function (code) {
-        return code.active;
-      }).length;
-
-    const activeDevices =
-      devices.filter(function (device) {
-        return device.active;
-      }).length;
-
-    res.json({
-
-      success: true,
-
-      service: "ARIS IPTV",
-
-      status: "online",
-
-      statistics: {
-
-        users: users.length,
-
-        activeUsers: activeUsers,
-
-        activationCodes:
-          activationCodes.length,
-
-        activeCodes: activeCodes,
-
-        devices: devices.length,
-
-        activeDevices: activeDevices
-
-      },
-
-      users: users.map(function (user) {
-
-        return {
-          id: user.id,
-          username: user.username,
-          active: user.active
-        };
-
-      }),
-
-      devices: devices,
-
-      codes: activationCodes.map(function (code) {
-
-        return {
-          code: code.code,
-          active: code.active,
-          device: code.device
-        };
-
-      }),
-
-      timestamp:
-        new Date().toISOString()
-
-    });
-
-  }
-);
-
-
-// =====================================
-// TEST ADMIN
-// =====================================
-
-app.get(
-  "/api/admin/test",
-  adminAuth,
-  function (req, res) {
-
-    res.json({
-
-      success: true,
-
-      message:
-        "Authentification admin réussie",
-
-      service:
-        "ARIS IPTV"
-
-    });
-
-  }
-);
-
-
-// =====================================
-// CONNEXION UTILISATEUR
-// =====================================
-
-app.post("/api/login", function (req, res) {
-
-  const username =
-    req.body.username;
-
-  const password =
-    req.body.password;
+app.post("/api/login", (req, res) => {
+  const username = String(req.body.username || "").trim();
+  const password = String(req.body.password || "");
 
   if (!username || !password) {
-
     return res.status(400).json({
-
       success: false,
-
-      message:
-        "Username et password obligatoires"
-
+      message: "Username et password obligatoires"
     });
-
   }
 
-  const user =
-    users.find(function (item) {
-
-      return (
-        item.username === username &&
-        item.password === password &&
-        item.active === true
-      );
-
-    });
+  const user = users.find(
+    item =>
+      item.username === username &&
+      item.password === password &&
+      item.active === true
+  );
 
   if (!user) {
-
     return res.status(401).json({
-
       success: false,
-
-      message:
-        "Identifiants incorrects"
-
+      message: "Identifiants incorrects"
     });
+  }
 
+  const token = crypto.randomBytes(24).toString("hex");
+
+  res.json({
+    success: true,
+    message: "Connexion réussie",
+    token: token,
+    user: {
+      id: user.id,
+      username: user.username,
+      active: user.active
+    }
+  });
+});
+
+/* =========================
+   ADMIN OVERVIEW
+========================= */
+
+app.get("/api/admin/overview", adminAuth, (req, res) => {
+  const activeUsers = users.filter(
+    user => user.active
+  ).length;
+
+  const activeCodes = activationCodes.filter(
+    code => code.active
+  ).length;
+
+  const activeDevices = devices.filter(
+    device => device.active
+  ).length;
+
+  res.json({
+    success: true,
+    service: "ARIS IPTV",
+    status: "online",
+
+    statistics: {
+      users: users.length,
+      activeUsers: activeUsers,
+      activationCodes: activationCodes.length,
+      activeCodes: activeCodes,
+      devices: devices.length,
+      activeDevices: activeDevices
+    },
+
+    users: users.map(user => ({
+      id: user.id,
+      username: user.username,
+      active: user.active
+    })),
+
+    codes: activationCodes,
+
+    devices: devices,
+
+    timestamp: new Date().toISOString()
+  });
+});
+
+/* =========================
+   ADMIN TEST
+========================= */
+
+app.get("/api/admin/test", adminAuth, (req, res) => {
+  res.json({
+    success: true,
+    message: "Authentification admin réussie",
+    service: "ARIS IPTV"
+  });
+});
+
+/* =========================
+   UTILISATEURS
+========================= */
+
+app.get("/api/users", adminAuth, (req, res) => {
+  res.json({
+    success: true,
+    users: users.map(user => ({
+      id: user.id,
+      username: user.username,
+      active: user.active
+    }))
+  });
+});
+
+app.post("/api/users", adminAuth, (req, res) => {
+  const username = String(req.body.username || "").trim();
+  const password = String(req.body.password || "");
+
+  if (!username || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Username et password obligatoires"
+    });
+  }
+
+  const existing = users.find(
+    user => user.username.toLowerCase() === username.toLowerCase()
+  );
+
+  if (existing) {
+    return res.status(409).json({
+      success: false,
+      message: "Utilisateur déjà existant"
+    });
+  }
+
+  const newUser = {
+    id: users.length
+      ? Math.max(...users.map(user => user.id)) + 1
+      : 1,
+    username: username,
+    password: password,
+    active: true
+  };
+
+  users.push(newUser);
+
+  res.json({
+    success: true,
+    message: "Utilisateur créé avec succès",
+    user: {
+      id: newUser.id,
+      username: newUser.username,
+      active: newUser.active
+    }
+  });
+});
+
+app.post("/api/users/activate", adminAuth, (req, res) => {
+  const id = Number(req.body.id);
+
+  const user = users.find(item => item.id === id);
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: "Utilisateur introuvable"
+    });
+  }
+
+  user.active = true;
+
+  res.json({
+    success: true,
+    message: "Utilisateur activé",
+    user: {
+      id: user.id,
+      username: user.username,
+      active: user.active
+    }
+  });
+});
+
+app.post("/api/users/deactivate", adminAuth, (req, res) => {
+  const id = Number(req.body.id);
+
+  if (id === 1) {
+    return res.status(403).json({
+      success: false,
+      message: "Le compte principal ne peut pas être désactivé"
+    });
+  }
+
+  const user = users.find(item => item.id === id);
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: "Utilisateur introuvable"
+    });
+  }
+
+  user.active = false;
+
+  res.json({
+    success: true,
+    message: "Utilisateur désactivé",
+    user: {
+      id: user.id,
+      username: user.username,
+      active: user.active
+    }
+  });
+});
+
+app.delete("/api/users/:id", adminAuth, (req, res) => {
+  const id = Number(req.params.id);
+
+  if (id === 1) {
+    return res.status(403).json({
+      success: false,
+      message: "Le compte principal ne peut pas être supprimé"
+    });
+  }
+
+  const index = users.findIndex(
+    user => user.id === id
+  );
+
+  if (index === -1) {
+    return res.status(404).json({
+      success: false,
+      message: "Utilisateur introuvable"
+    });
+  }
+
+  const deleted = users[index];
+
+  users.splice(index, 1);
+
+  res.json({
+    success: true,
+    message: "Utilisateur supprimé",
+    user: {
+      id: deleted.id,
+      username: deleted.username
+    }
+  });
+});
+
+/* =========================
+   CODES
+========================= */
+
+/* Voir tous les codes */
+
+app.get("/api/codes", adminAuth, (req, res) => {
+  res.json({
+    success: true,
+    codes: activationCodes
+  });
+});
+
+/* Créer un code */
+
+app.post("/api/codes", adminAuth, (req, res) => {
+  let code = String(req.body.code || "").trim();
+
+  if (!code) {
+    code = generateCode();
+  }
+
+  code = code.toUpperCase();
+
+  const existing = activationCodes.find(
+    item => item.code === code
+  );
+
+  if (existing) {
+    return res.status(409).json({
+      success: false,
+      message: "Ce code existe déjà"
+    });
+  }
+
+  const newCode = {
+    id: activationCodes.length
+      ? Math.max(...activationCodes.map(item => item.id)) + 1
+      : 1,
+
+    code: code,
+    active: true,
+    deviceId: null,
+    deviceName: null,
+    platform: null,
+    createdAt: new Date().toISOString(),
+    activatedAt: null
+  };
+
+  activationCodes.push(newCode);
+
+  res.json({
+    success: true,
+    message: "Code créé avec succès",
+    code: newCode
+  });
+});
+
+/* Générer automatiquement un code */
+
+app.post("/api/codes/generate", adminAuth, (req, res) => {
+  let code;
+
+  do {
+    code = generateCode();
+  } while (
+    activationCodes.some(
+      item => item.code === code
+    )
+  );
+
+  const newCode = {
+    id: activationCodes.length
+      ? Math.max(...activationCodes.map(item => item.id)) + 1
+      : 1,
+
+    code: code,
+    active: true,
+    deviceId: null,
+    deviceName: null,
+    platform: null,
+    createdAt: new Date().toISOString(),
+    activatedAt: null
+  };
+
+  activationCodes.push(newCode);
+
+  res.json({
+    success: true,
+    message: "Nouveau code généré",
+    code: newCode
+  });
+});
+
+/* Activer un code */
+
+app.post("/api/codes/activate", adminAuth, (req, res) => {
+  const id = Number(req.body.id);
+
+  const item = activationCodes.find(
+    code => code.id === id
+  );
+
+  if (!item) {
+    return res.status(404).json({
+      success: false,
+      message: "Code introuvable"
+    });
+  }
+
+  item.active = true;
+
+  res.json({
+    success: true,
+    message: "Code activé",
+    code: item
+  });
+});
+
+/* Désactiver un code */
+
+app.post("/api/codes/deactivate", adminAuth, (req, res) => {
+  const id = Number(req.body.id);
+
+  const item = activationCodes.find(
+    code => code.id === id
+  );
+
+  if (!item) {
+    return res.status(404).json({
+      success: false,
+      message: "Code introuvable"
+    });
+  }
+
+  item.active = false;
+
+  res.json({
+    success: true,
+    message: "Code désactivé",
+    code: item
+  });
+});
+
+/* Supprimer un code */
+
+app.delete("/api/codes/:id", adminAuth, (req, res) => {
+  const id = Number(req.params.id);
+
+  const index = activationCodes.findIndex(
+    code => code.id === id
+  );
+
+  if (index === -1) {
+    return res.status(404).json({
+      success: false,
+      message: "Code introuvable"
+    });
+  }
+
+  const deleted = activationCodes[index];
+
+  activationCodes.splice(index, 1);
+
+  if (deleted.deviceId) {
+    devices = devices.filter(
+      device =>
+        device.deviceId !== deleted.deviceId
+    );
   }
 
   res.json({
-
     success: true,
-
-    message:
-      "Connexion réussie",
-
-    user: {
-
-      id: user.id,
-
-      username: user.username
-
-    }
-
+    message: "Code supprimé",
+    code: deleted
   });
-
 });
 
+/* Voir un code précis */
 
-// =====================================
-// ACTIVATION
-// =====================================
+app.get("/api/codes/:id", adminAuth, (req, res) => {
+  const id = Number(req.params.id);
 
-app.post("/api/activate", function (req, res) {
+  const item = activationCodes.find(
+    code => code.id === id
+  );
 
-  const code =
-    req.body.code;
-
-  const deviceId =
-    req.body.deviceId;
-
-  if (!code) {
-
-    return res.status(400).json({
-
+  if (!item) {
+    return res.status(404).json({
       success: false,
-
-      message:
-        "Code d'activation obligatoire"
-
+      message: "Code introuvable"
     });
-
   }
 
-  const activation =
-    activationCodes.find(function (item) {
+  res.json({
+    success: true,
+    code: item
+  });
+});
 
-      return (
-        item.code === code &&
-        item.active === true
-      );
+/* =========================
+   ACTIVATION APPAREIL
+========================= */
 
-    });
+app.post("/api/activate", (req, res) => {
+  const codeValue = String(
+    req.body.code || ""
+  ).trim().toUpperCase();
 
-  if (!activation) {
+  const deviceId = String(
+    req.body.deviceId || ""
+  ).trim();
 
-    return res.status(401).json({
+  const deviceName = String(
+    req.body.deviceName || "Appareil Android"
+  ).trim();
 
+  const platform = String(
+    req.body.platform || "Android"
+  ).trim();
+
+  if (!codeValue) {
+    return res.status(400).json({
       success: false,
-
-      message:
-        "Code d'activation invalide"
-
+      message: "Code d'activation obligatoire"
     });
+  }
 
+  if (!deviceId) {
+    return res.status(400).json({
+      success: false,
+      message: "Identifiant appareil obligatoire"
+    });
+  }
+
+  const item = activationCodes.find(
+    code => code.code === codeValue
+  );
+
+  if (!item) {
+    return res.status(401).json({
+      success: false,
+      message: "Code d'activation invalide"
+    });
+  }
+
+  if (!item.active) {
+    return res.status(403).json({
+      success: false,
+      message: "Ce code est désactivé"
+    });
   }
 
   if (
-    activation.device &&
-    activation.device !== deviceId
+    item.deviceId &&
+    item.deviceId !== deviceId
   ) {
-
     return res.status(403).json({
-
       success: false,
-
-      message:
-        "Ce code est déjà utilisé sur un autre appareil"
-
+      message: "Ce code est déjà associé à un autre appareil"
     });
-
   }
 
-  if (deviceId) {
+  item.deviceId = deviceId;
+  item.deviceName = deviceName;
+  item.platform = platform;
 
-    activation.device =
-      deviceId;
+  if (!item.activatedAt) {
+    item.activatedAt =
+      new Date().toISOString();
+  }
 
-    const existingDevice =
-      devices.find(function (device) {
+  const existingDevice = devices.find(
+    device =>
+      device.deviceId === deviceId
+  );
 
-        return (
-          device.deviceId === deviceId
-        );
+  if (existingDevice) {
+    existingDevice.active = true;
+    existingDevice.code = codeValue;
+    existingDevice.deviceName = deviceName;
+    existingDevice.platform = platform;
+  } else {
+    devices.push({
+      id: devices.length
+        ? Math.max(...devices.map(item => item.id)) + 1
+        : 1,
 
-      });
-
-    if (!existingDevice) {
-
-      devices.push({
-
-        deviceId:
-          deviceId,
-
-        code:
-          code,
-
-        active:
-          true,
-
-        activatedAt:
-          new Date().toISOString()
-
-      });
-
-    }
-
+      deviceId: deviceId,
+      code: codeValue,
+      deviceName: deviceName,
+      platform: platform,
+      active: true,
+      activatedAt: item.activatedAt
+    });
   }
 
   res.json({
-
     success: true,
-
-    message:
-      "Appareil activé avec succès",
-
-    code:
-      code,
-
-    deviceId:
-      deviceId || null
-
+    message: "Appareil activé avec succès",
+    code: item.code,
+    deviceId: item.deviceId,
+    deviceName: item.deviceName,
+    platform: item.platform
   });
-
 });
 
+/* =========================
+   CHECK CODE
+========================= */
 
-// =====================================
-// VÉRIFICATION CODE
-// =====================================
+app.post("/api/check-code", (req, res) => {
+  const codeValue = String(
+    req.body.code || ""
+  ).trim().toUpperCase();
 
-app.post("/api/check-code", function (req, res) {
+  const item = activationCodes.find(
+    code =>
+      code.code === codeValue &&
+      code.active === true
+  );
 
-  const code =
-    req.body.code;
-
-  const activation =
-    activationCodes.find(function (item) {
-
-      return (
-        item.code === code &&
-        item.active === true
-      );
-
-    });
-
-  if (!activation) {
-
+  if (!item) {
     return res.json({
-
       success: false,
-
       valid: false,
-
-      message:
-        "Code invalide"
-
+      message: "Code invalide ou désactivé"
     });
-
   }
 
   res.json({
-
     success: true,
-
     valid: true,
-
-    message:
-      "Code valide"
-
+    message: "Code valide",
+    code: item.code,
+    deviceAssociated: !!item.deviceId
   });
-
 });
 
-
-// =====================================
-// 👤 VOIR LES UTILISATEURS
-// =====================================
-
-app.get(
-  "/api/users",
-  adminAuth,
-  function (req, res) {
-
-    res.json({
-
-      success: true,
-
-      users:
-        users.map(function (user) {
-
-          return {
-
-            id:
-              user.id,
-
-            username:
-              user.username,
-
-            active:
-              user.active
-
-          };
-
-        })
-
-    });
-
-  }
-);
-
-
-// =====================================
-// ➕ CRÉER UN UTILISATEUR
-// =====================================
-
-app.post(
-  "/api/users",
-  adminAuth,
-  function (req, res) {
-
-    const username =
-      String(req.body.username || "").trim();
-
-    const password =
-      String(req.body.password || "").trim();
-
-    if (!username || !password) {
-
-      return res.status(400).json({
-
-        success: false,
-
-        message:
-          "Username et password obligatoires"
-
-      });
-
-    }
-
-    if (
-      username.length < 3 ||
-      password.length < 4
-    ) {
-
-      return res.status(400).json({
-
-        success: false,
-
-        message:
-          "Username minimum 3 caractères et password minimum 4 caractères"
-
-      });
-
-    }
-
-    const existing =
-      users.find(function (user) {
-
-        return (
-          user.username.toLowerCase() ===
-          username.toLowerCase()
-        );
-
-      });
-
-    if (existing) {
-
-      return res.status(409).json({
-
-        success: false,
-
-        message:
-          "Utilisateur déjà existant"
-
-      });
-
-    }
-
-    let newId = 1;
-
-    if (users.length > 0) {
-
-      newId =
-        Math.max.apply(
-          null,
-          users.map(function (user) {
-            return user.id;
-          })
-        ) + 1;
-
-    }
-
-    const newUser = {
-
-      id:
-        newId,
-
-      username:
-        username,
-
-      password:
-        password,
-
-      active:
-        true
-
-    };
-
-    users.push(newUser);
-
-    res.json({
-
-      success: true,
-
-      message:
-        "Utilisateur créé avec succès",
-
-      user: {
-
-        id:
-          newUser.id,
-
-        username:
-          newUser.username,
-
-        active:
-          newUser.active
-
-      }
-
-    });
-
-  }
-);
-
-
-// =====================================
-// 🟢 ACTIVER / 🔴 DÉSACTIVER
-// =====================================
-
-app.post(
-  "/api/users/toggle",
-  adminAuth,
-  function (req, res) {
-
-    const id =
-      Number(req.body.id);
-
-    const user =
-      users.find(function (item) {
-
-        return item.id === id;
-
-      });
-
-    if (!user) {
-
-      return res.status(404).json({
-
-        success: false,
-
-        message:
-          "Utilisateur introuvable"
-
-      });
-
-    }
-
-    if (user.username === "admin") {
-
-      return res.status(403).json({
-
-        success: false,
-
-        message:
-          "Le compte admin principal ne peut pas être désactivé"
-
-      });
-
-    }
-
-    user.active =
-      !user.active;
-
-    res.json({
-
-      success: true,
-
-      message:
-        user.active
-          ? "Utilisateur activé"
-          : "Utilisateur désactivé",
-
-      user: {
-
-        id:
-          user.id,
-
-        username:
-          user.username,
-
-        active:
-          user.active
-
-      }
-
-    });
-
-  }
-);
-
-
-// =====================================
-// 🗑️ SUPPRIMER UTILISATEUR
-// =====================================
-
-app.delete(
-  "/api/users/:id",
-  adminAuth,
-  function (req, res) {
-
-    const id =
-      Number(req.params.id);
-
-    const index =
-      users.findIndex(function (user) {
-
-        return user.id === id;
-
-      });
-
-    if (index === -1) {
-
-      return res.status(404).json({
-
-        success: false,
-
-        message:
-          "Utilisateur introuvable"
-
-      });
-
-    }
-
-    if (
-      users[index].username ===
-      "admin"
-    ) {
-
-      return res.status(403).json({
-
-        success: false,
-
-        message:
-          "Le compte admin principal ne peut pas être supprimé"
-
-      });
-
-    }
-
-    const deletedUser =
-      users.splice(index, 1)[0];
-
-    res.json({
-
-      success: true,
-
-      message:
-        "Utilisateur supprimé",
-
-      user: {
-
-        id:
-          deletedUser.id,
-
-        username:
-          deletedUser.username
-
-      }
-
-    });
-
-  }
-);
-
-
-// =====================================
-// 🔑 CODES
-// =====================================
-
-app.get(
-  "/api/codes",
-  adminAuth,
-  function (req, res) {
-
-    res.json({
-
-      success: true,
-
-      codes:
-        activationCodes
-
-    });
-
-  }
-);
-
-
-app.post(
-  "/api/codes",
-  adminAuth,
-  function (req, res) {
-
-    const code =
-      String(req.body.code || "").trim();
-
-    if (!code) {
-
-      return res.status(400).json({
-
-        success: false,
-
-        message:
-          "Code obligatoire"
-
-      });
-
-    }
-
-    const existing =
-      activationCodes.find(function (item) {
-
-        return item.code === code;
-
-      });
-
-    if (existing) {
-
-      return res.status(409).json({
-
-        success: false,
-
-        message:
-          "Ce code existe déjà"
-
-      });
-
-    }
-
-    activationCodes.push({
-
-      code:
-        code,
-
-      active:
-        true,
-
-      device:
-        null,
-
-      createdAt:
-        new Date().toISOString()
-
-    });
-
-    res.json({
-
-      success: true,
-
-      message:
-        "Code créé avec succès",
-
-      code:
-        code
-
-    });
-
-  }
-);
-
-
-// =====================================
-// 📱 APPAREILS
-// =====================================
-
-app.get(
-  "/api/devices",
-  adminAuth,
-  function (req, res) {
-
-    res.json({
-
-      success: true,
-
-      devices:
-        devices
-
-    });
-
-  }
-);
-
+/* =========================
+   APPAREILS
+========================= */
+
+app.get("/api/devices", adminAuth, (req, res) => {
+  res.json({
+    success: true,
+    devices: devices
+  });
+});
 
 app.post(
   "/api/devices/deactivate",
   adminAuth,
-  function (req, res) {
+  (req, res) => {
+    const deviceId = String(
+      req.body.deviceId || ""
+    ).trim();
 
-    const deviceId =
-      req.body.deviceId;
-
-    const device =
-      devices.find(function (item) {
-
-        return (
-          item.deviceId === deviceId
-        );
-
-      });
+    const device = devices.find(
+      item =>
+        item.deviceId === deviceId
+    );
 
     if (!device) {
-
       return res.status(404).json({
-
         success: false,
-
-        message:
-          "Appareil introuvable"
-
+        message: "Appareil introuvable"
       });
-
     }
 
-    device.active =
-      false;
+    device.active = false;
+
+    const code = activationCodes.find(
+      item =>
+        item.code === device.code
+    );
+
+    if (code) {
+      code.deviceId = null;
+      code.deviceName = null;
+      code.platform = null;
+    }
 
     res.json({
-
       success: true,
-
-      message:
-        "Appareil désactivé"
-
+      message: "Appareil désactivé",
+      device: device
     });
-
   }
 );
 
+/* =========================
+   PAGE ADMIN
+========================= */
+
+app.get("/admin", (req, res) => {
+  res.send(`
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0">
+
+<title>ARIS IPTV - Administration</title>
+
+<style>
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #050c16;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+header {
+  background: #0a1b2d;
+  padding: 30px;
+  text-align: center;
+  border-bottom: 1px solid #178ee5;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 36px;
+}
+
+header p {
+  color: #55b9ff;
+}
+
+.container {
+  max-width: 1200px;
+  margin: auto;
+  padding: 30px 20px;
+}
+
+.card {
+  background: #0d2035;
+  border: 1px solid #178ee5;
+  border-radius: 16px;
+  padding: 25px;
+  margin-bottom: 25px;
+}
+
+h2 {
+  color: #ffffff;
+  margin-top: 0;
+}
+
+input {
+  width: 100%;
+  padding: 15px;
+  margin: 7px 0;
+  border-radius: 8px;
+  border: 1px solid #178ee5;
+  background: #071522;
+  color: white;
+  font-size: 16px;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 12px 18px;
+  margin: 5px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.create {
+  background: #169be8;
+  color: white;
+}
+
+.activate {
+  background: #159447;
+  color: white;
+}
+
+.deactivate {
+  background: #e09b13;
+  color: white;
+}
+
+.delete {
+  background: #d63737;
+  color: white;
+}
 
-// =====================================
-// 🖥️ PANNEAU ADMIN
-// =====================================
+.refresh {
+  background: #34495e;
+  color: white;
+}
 
-app.get("/admin", function (req, res) {
+.generate {
+  background: #8e44ad;
+  color: white;
+}
 
-  const html = [
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+}
 
-    "<!DOCTYPE html>",
+th,
+td {
+  border-bottom: 1px solid #24415a;
+  padding: 15px 10px;
+  text-align: left;
+}
 
-    "<html lang='fr'>",
+th {
+  color: #55b9ff;
+}
 
-    "<head>",
+.badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-weight: bold;
+}
 
-    "<meta charset='UTF-8'>",
+.active {
+  background: #115d38;
+  color: #45f09a;
+}
 
-    "<meta name='viewport' content='width=device-width, initial-scale=1.0'>",
+.inactive {
+  background: #632727;
+  color: #ff7777;
+}
 
-    "<title>ARIS IPTV - Administration</title>",
+.device {
+  color: #c7d6e8;
+}
 
-    "<style>",
+.small {
+  color: #91a6ba;
+  font-size: 13px;
+}
 
-    "*{box-sizing:border-box;}",
+.message {
+  padding: 12px;
+  margin-bottom: 15px;
+  border-radius: 8px;
+  background: #102b43;
+  color: #70c7ff;
+}
 
-    "body{margin:0;background:#050b14;color:white;font-family:Arial,sans-serif;}",
+@media(max-width: 800px) {
 
-    "header{background:#0a192a;padding:25px;text-align:center;border-bottom:1px solid #168bd0;}",
+table {
+  font-size: 13px;
+}
 
-    "header h1{margin:0;font-size:32px;}",
+button {
+  width: 100%;
+  margin: 4px 0;
+}
 
-    "header p{color:#8ccfff;}",
+}
 
-    ".container{max-width:1200px;margin:auto;padding:25px;}",
+</style>
 
-    ".stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;margin-bottom:25px;}",
+</head>
 
-    ".stat{background:#0c1d30;border:1px solid #176da3;border-radius:14px;padding:20px;}",
+<body>
 
-    ".stat-number{font-size:34px;font-weight:bold;color:#35b7ff;margin-top:8px;}",
+<header>
 
-    ".card{background:#0e1f32;border:1px solid #176da3;border-radius:16px;padding:22px;margin-bottom:25px;}",
+<h1>🦁 ARIS IPTV</h1>
 
-    ".card h2{margin-top:0;}",
+<p>Administration</p>
 
-    "label{display:block;margin-top:10px;}",
+</header>
 
-    "input{width:100%;padding:13px;margin:6px 0 12px;border-radius:9px;border:1px solid #267cad;background:#071522;color:white;font-size:15px;}",
+<div class="container">
 
-    "button{border:none;border-radius:9px;padding:11px 16px;cursor:pointer;font-weight:bold;margin:4px;}",
+<div class="card">
 
-    ".btn-create{background:#168bd0;color:white;}",
+<h2>🔐 Connexion administrateur</h2>
 
-    ".btn-refresh{background:#374b60;color:white;}",
+<input
+id="adminToken"
+type="password"
+placeholder="Token administrateur"
+/>
 
-    ".btn-toggle{background:#168bd0;color:white;}",
+<button
+class="create"
+onclick="saveToken()">
 
-    ".btn-delete{background:#c0392b;color:white;}",
+🔐 ENREGISTRER LE TOKEN
 
-    "button:hover{opacity:.85;}",
+</button>
 
-    "table{width:100%;border-collapse:collapse;margin-top:15px;}",
+</div>
 
-    "th,td{padding:14px;border-bottom:1px solid #20384d;text-align:left;}",
+<div id="message"></div>
 
-    "th{color:#83cfff;}",
+<div class="card">
 
-    ".badge{display:inline-block;padding:6px 10px;border-radius:20px;font-size:13px;font-weight:bold;}",
+<h2>🔑 Créer un code d'activation</h2>
 
-    ".active{background:#164f3b;color:#48e0a5;}",
+<input
+id="newCode"
+placeholder="Exemple : ARIS-CLIENT-001"
+/>
 
-    ".inactive{background:#512522;color:#ff8c82;}",
+<button
+class="create"
+onclick="createCode()">
 
-    ".message{margin-top:12px;padding:12px;border-radius:9px;display:none;}",
+➕ CRÉER LE CODE
 
-    ".success{background:#123d31;color:#55e2a5;}",
+</button>
 
-    ".error{background:#4a211f;color:#ff9d94;}",
+<button
+class="generate"
+onclick="generateCode()">
 
-    ".topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}",
+🎲 GÉNÉRER AUTOMATIQUEMENT
 
-    "@media(max-width:700px){table{font-size:13px;}th,td{padding:9px;}.actions button{display:block;width:100%;}}",
+</button>
 
-    "</style>",
+</div>
 
-    "</head>",
+<div class="card">
 
-    "<body>",
+<h2>🔑 Gestion des codes</h2>
 
-    "<header>",
+<button
+class="refresh"
+onclick="loadCodes()">
 
-    "<h1>🦁 ARIS IPTV</h1>",
+🔄 ACTUALISER LA LISTE
 
-    "<p>Administration</p>",
+</button>
 
-    "</header>",
+<table>
 
-    "<div class='container'>",
+<thead>
 
-    "<div class='stats'>",
+<tr>
 
-    "<div class='stat'>",
+<th>ID</th>
 
-    "<div>👤 Utilisateurs</div>",
+<th>Code</th>
 
-    "<div id='totalUsers' class='stat-number'>0</div>",
+<th>État</th>
 
-    "</div>",
+<th>Appareil associé</th>
 
-    "<div class='stat'>",
+<th>Actions</th>
 
-    "<div>🟢 Utilisateurs actifs</div>",
+</tr>
 
-    "<div id='activeUsers' class='stat-number'>0</div>",
+</thead>
 
-    "</div>",
+<tbody id="codesTable">
 
-    "<div class='stat'>",
+</tbody>
 
-    "<div>🔑 Codes</div>",
+</table>
 
-    "<div id='totalCodes' class='stat-number'>0</div>",
+</div>
 
-    "</div>",
+<div class="card">
 
-    "<div class='stat'>",
+<h2>📱 Appareils</h2>
 
-    "<div>📱 Appareils</div>",
+<button
+class="refresh"
+onclick="loadDevices()">
 
-    "<div id='totalDevices' class='stat-number'>0</div>",
+🔄 ACTUALISER LES APPAREILS
 
-    "</div>",
+</button>
 
-    "</div>",
+<table>
 
+<thead>
 
-    "<div class='card'>",
+<tr>
 
-    "<h2>➕ Créer un utilisateur</h2>",
+<th>ID</th>
 
-    "<label>Username</label>",
+<th>Appareil</th>
 
-    "<input id='username' type='text' placeholder='Exemple : client01'>",
+<th>Plateforme</th>
 
-    "<label>Password</label>",
+<th>Code</th>
 
-    "<input id='password' type='password' placeholder='Mot de passe'>",
+<th>État</th>
 
-    "<button class='btn-create' onclick='createUser()'>➕ CRÉER L'UTILISATEUR</button>",
+</tr>
 
-    "<div id='message' class='message'></div>",
+</thead>
 
-    "</div>",
+<tbody id="devicesTable">
 
+</tbody>
 
-    "<div class='card'>",
+</table>
 
-    "<div class='topbar'>",
+</div>
 
-    "<h2>👤 Gestion des utilisateurs</h2>",
+</div>
 
-    "<button class='btn-refresh' onclick='loadUsers()'>🔄 ACTUALISER LA LISTE</button>",
+<script>
 
-    "</div>",
+function token() {
 
-    "<div id='usersContainer'>Chargement...</div>",
+  return localStorage.getItem("aris_admin_token") || "";
 
-    "</div>",
+}
 
+function saveToken() {
 
-    "<div class='card'>",
+  const value =
+    document.getElementById("adminToken").value.trim();
 
-    "<h2>🔑 Codes d'activation</h2>",
+  if (!value) {
 
-    "<div id='codesContainer'>Chargement...</div>",
+    showMessage("Entrez le token administrateur.");
 
-    "</div>",
+    return;
 
+  }
 
-    "<div class='card'>",
+  localStorage.setItem(
+    "aris_admin_token",
+    value
+  );
 
-    "<h2>📱 Appareils</h2>",
+  showMessage("Token enregistré.");
 
-    "<div id='devicesContainer'>Chargement...</div>",
+  loadCodes();
+  loadDevices();
 
-    "</div>",
+}
 
-    "</div>",
+function showMessage(text) {
 
+  document.getElementById("message").innerHTML =
+    '<div class="message">' +
+    text +
+    '</div>';
 
-    "<script>",
+}
 
-    "var adminToken=localStorage.getItem('aris_admin_token');",
+async function api(url, options = {}) {
 
-    "if(!adminToken){",
+  options.headers = {
 
-    "adminToken=prompt('Token administrateur ARIS IPTV :');",
+    "Content-Type": "application/json",
 
-    "if(adminToken){localStorage.setItem('aris_admin_token',adminToken);}",
+    "Authorization":
+      "Bearer " + token(),
 
-    "}",
+    ...(options.headers || {})
 
+  };
 
-    "async function api(url,options){",
+  const response =
+    await fetch(url, options);
 
-    "options=options||{};",
+  const data =
+    await response.json();
 
-    "options.headers=Object.assign({},options.headers||{}, {",
+  if (!response.ok) {
 
-    "'Content-Type':'application/json',",
+    throw new Error(
+      data.message || "Erreur serveur"
+    );
 
-    "'Authorization':'Bearer '+adminToken",
+  }
 
-    "});",
+  return data;
 
-    "var response=await fetch(url,options);",
+}
 
-    "var data=await response.json();",
+async function createCode() {
 
-    "if(!response.ok){throw new Error(data.message||'Erreur serveur');}",
+  const input =
+    document.getElementById("newCode");
 
-    "return data;",
+  const code =
+    input.value.trim();
 
-    "}",
+  try {
 
+    const data =
+      await api("/api/codes", {
 
-    "function escapeHtml(value){",
+        method: "POST",
 
-    "return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#039;');",
+        body: JSON.stringify({
+          code: code
+        })
 
-    "}",
+      });
 
+    showMessage(
+      "✅ Code créé : " +
+      data.code.code
+    );
 
-    "function showMessage(text,type){",
+    input.value = "";
 
-    "var box=document.getElementById('message');",
+    loadCodes();
 
-    "box.textContent=text;",
+  } catch(error) {
 
-    "box.className='message '+(type||'success');",
+    showMessage(
+      "❌ " + error.message
+    );
 
-    "box.style.display='block';",
+  }
 
-    "}",
+}
 
+async function generateCode() {
 
-    "async function createUser(){",
+  try {
 
-    "var username=document.getElementById('username').value.trim();",
+    const data =
+      await api("/api/codes/generate", {
 
-    "var password=document.getElementById('password').value.trim();",
+        method: "POST"
 
-    "if(!username||!password){showMessage('Username et password obligatoires','error');return;}",
+      });
 
-    "try{",
+    showMessage(
+      "✅ Nouveau code : " +
+      data.code.code
+    );
 
-    "var data=await api('/api/users',{method:'POST',body:JSON.stringify({username:username,password:password})});",
+    loadCodes();
 
-    "showMessage('✅ '+data.message,'success');",
+  } catch(error) {
 
-    "document.getElementById('username').value='';",
+    showMessage(
+      "❌ " + error.message
+    );
 
-    "document.getElementById('password').value='';",
+  }
 
-    "await loadUsers();",
+}
 
-    "}catch(error){showMessage('❌ '+error.message,'error');}",
+async function activateCode(id) {
 
-    "}",
+  try {
 
+    await api(
+      "/api/codes/activate",
+      {
 
-    "async function loadUsers(){",
+        method: "POST",
 
-    "var container=document.getElementById('usersContainer');",
+        body: JSON.stringify({
+          id: id
+        })
 
-    "container.innerHTML='Chargement...';",
+      }
+    );
 
-    "try{",
+    showMessage("🟢 Code activé.");
 
-    "var data=await api('/api/users');",
+    loadCodes();
 
-    "var users=data.users||[];",
+  } catch(error) {
 
-    "document.getElementById('totalUsers').textContent=users.length;",
+    showMessage(
+      "❌ " + error.message
+    );
 
-    "document.getElementById('activeUsers').textContent=users.filter(function(user){return user.active;}).length;",
+  }
 
-    "if(users.length===0){container.innerHTML='<p>Aucun utilisateur.</p>';return;}",
+}
 
-    "var html='<table><thead><tr><th>ID</th><th>Username</th><th>État</th><th>Actions</th></tr></thead><tbody>';",
+async function deactivateCode(id) {
 
-    "users.forEach(function(user){",
+  try {
 
-    "html+='<tr>';",
+    await api(
+      "/api/codes/deactivate",
+      {
 
-    "html+='<td>'+user.id+'</td>';",
+        method: "POST",
 
-    "html+='<td><strong>'+escapeHtml(user.username)+'</strong></td>';",
+        body: JSON.stringify({
+          id: id
+        })
 
-    "if(user.active){",
+      }
+    );
 
-    "html+='<td><span class=\"badge active\">🟢 ACTIF</span></td>';",
+    showMessage("🔴 Code désactivé.");
 
-    "}else{",
+    loadCodes();
 
-    "html+='<td><span class=\"badge inactive\">🔴 INACTIF</span></td>';",
+  } catch(error) {
 
-    "}",
+    showMessage(
+      "❌ " + error.message
+    );
 
-    "html+='<td class=\"actions\">';",
+  }
 
-    "if(user.username==='admin'){",
+}
 
-    "html+='<strong>🔒 Compte principal</strong>';",
+async function deleteCode(id) {
 
-    "}else{",
+  if (
+    !confirm(
+      "Supprimer définitivement ce code ?"
+    )
+  ) {
 
-    "if(user.active){",
+    return;
 
-    "html+='<button class=\"btn-toggle\" onclick=\"toggleUser('+user.id+')\">🔴 Désactiver</button>';",
+  }
 
-    "}else{",
+  try {
 
-    "html+='<button class=\"btn-toggle\" onclick=\"toggleUser('+user.id+')\">🟢 Activer</button>';",
+    await api(
+      "/api/codes/" + id,
+      {
 
-    "}",
+        method: "DELETE"
 
-    "html+='<button class=\"btn-delete\" onclick=\"deleteUser('+user.id+')\">🗑️ Supprimer</button>';",
+      }
+    );
 
-    "}",
+    showMessage("🗑️ Code supprimé.");
 
-    "html+='</td>';",
+    loadCodes();
 
-    "html+='</tr>';",
+  } catch(error) {
 
-    "});",
+    showMessage(
+      "❌ " + error.message
+    );
 
-    "html+='</tbody></table>';",
+  }
 
-    "container.innerHTML=html;",
+}
 
-    "}catch(error){",
+async function loadCodes() {
 
-    "container.innerHTML='<p>❌ '+escapeHtml(error.message)+'</p>';",
+  try {
 
-    "}",
+    const data =
+      await api("/api/codes");
 
-    "}",
+    const table =
+      document.getElementById(
+        "codesTable"
+      );
 
+    table.innerHTML = "";
 
-    "async function toggleUser(id){",
+    data.codes.forEach(code => {
 
-    "try{",
+      const state =
+        code.active
+          ? '<span class="badge active">🟢 ACTIF</span>'
+          : '<span class="badge inactive">🔴 DÉSACTIVÉ</span>';
 
-    "var data=await api('/api/users/toggle',{method:'POST',body:JSON.stringify({id:id})});",
+      let device = "Non utilisé";
 
-    "alert('✅ '+data.message);",
+      if (code.deviceId) {
 
-    "await loadUsers();",
+        device =
+          "<strong>" +
+          (code.deviceName || "Appareil") +
+          "</strong><br>" +
+          '<span class="small">' +
+          "ID : " +
+          code.deviceId +
+          "</span><br>" +
+          '<span class="small">' +
+          (code.platform || "") +
+          "</span>";
 
-    "}catch(error){alert('❌ '+error.message);}",
+      }
 
-    "}",
+      let actions = "";
 
+      if (code.active) {
 
-    "async function deleteUser(id){",
+        actions +=
+          '<button class="deactivate" ' +
+          'onclick="deactivateCode(' +
+          code.id +
+          ')">' +
+          "🔴 Désactiver" +
+          "</button>";
 
-    "if(!confirm('Voulez-vous vraiment supprimer cet utilisateur ?')){return;}",
+      } else {
 
-    "try{",
+        actions +=
+          '<button class="activate" ' +
+          'onclick="activateCode(' +
+          code.id +
+          ')">' +
+          "🟢 Activer" +
+          "</button>";
 
-    "var data=await api('/api/users/'+id,{method:'DELETE'});",
+      }
 
-    "alert('✅ '+data.message);",
+      actions +=
+        '<button class="delete" ' +
+        'onclick="deleteCode(' +
+        code.id +
+        ')">' +
+        "🗑️ Supprimer" +
+        "</button>";
 
-    "await loadUsers();",
+      table.innerHTML +=
 
-    "}catch(error){alert('❌ '+error.message);}",
+        "<tr>" +
 
-    "}",
+        "<td>" +
+        code.id +
+        "</td>" +
 
+        "<td><strong>" +
+        code.code +
+        "</strong></td>" +
 
-    "async function loadCodes(){",
+        "<td>" +
+        state +
+        "</td>" +
 
-    "var container=document.getElementById('codesContainer');",
+        '<td class="device">' +
+        device +
+        "</td>" +
 
-    "try{",
+        "<td>" +
+        actions +
+        "</td>" +
 
-    "var data=await api('/api/codes');",
+        "</tr>";
 
-    "var codes=data.codes||[];",
+    });
 
-    "document.getElementById('totalCodes').textContent=codes.length;",
+  } catch(error) {
 
-    "if(!codes.length){container.innerHTML='<p>Aucun code.</p>';return;}",
+    showMessage(
+      "❌ " + error.message
+    );
 
-    "var html='<table><tr><th>Code</th><th>État</th><th>Appareil</th></tr>';",
+  }
 
-    "codes.forEach(function(code){",
+}
 
-    "html+='<tr>';",
+async function loadDevices() {
 
-    "html+='<td><strong>'+escapeHtml(code.code)+'</strong></td>';",
+  try {
 
-    "if(code.active){",
+    const data =
+      await api("/api/devices");
 
-    "html+='<td><span class=\"badge active\">🟢 ACTIF</span></td>';",
+    const table =
+      document.getElementById(
+        "devicesTable"
+      );
 
-    "}else{",
+    table.innerHTML = "";
 
-    "html+='<td><span class=\"badge inactive\">🔴 INACTIF</span></td>';",
+    data.devices.forEach(device => {
 
-    "}",
+      const state =
+        device.active
+          ? '<span class="badge active">🟢 ACTIF</span>'
+          : '<span class="badge inactive">🔴 INACTIF</span>';
 
-    "html+='<td>'+escapeHtml(code.device||'Non utilisé')+'</td>';",
+      table.innerHTML +=
 
-    "html+='</tr>';",
+        "<tr>" +
 
-    "});",
+        "<td>" +
+        device.id +
+        "</td>" +
 
-    "html+='</table>';",
+        "<td>" +
+        (device.deviceName || "Appareil") +
+        "<br>" +
+        '<span class="small">' +
+        device.deviceId +
+        "</span>" +
+        "</td>" +
 
-    "container.innerHTML=html;",
+        "<td>" +
+        (device.platform || "") +
+        "</td>" +
 
-    "}catch(error){",
+        "<td>" +
+        device.code +
+        "</td>" +
 
-    "container.innerHTML='<p>❌ '+escapeHtml(error.message)+'</p>';",
+        "<td>" +
+        state +
+        "</td>" +
 
-    "}",
+        "</tr>";
 
-    "}",
+    });
 
+  } catch(error) {
 
-    "async function loadDevices(){",
+    showMessage(
+      "❌ " + error.message
+    );
 
-    "var container=document.getElementById('devicesContainer');",
+  }
 
-    "try{",
+}
 
-    "var data=await api('/api/devices');",
+window.onload = function() {
 
-    "var devices=data.devices||[];",
+  const saved =
+    localStorage.getItem(
+      "aris_admin_token"
+    );
 
-    "document.getElementById('totalDevices').textContent=devices.length;",
+  if (saved) {
 
-    "if(!devices.length){container.innerHTML='<p>Aucun appareil connecté.</p>';return;}",
+    document.getElementById(
+      "adminToken"
+    ).value = saved;
 
-    "var html='<table><tr><th>Device ID</th><th>Code</th><th>État</th></tr>';",
+  }
 
-    "devices.forEach(function(device){",
+};
 
-    "html+='<tr>';",
+</script>
 
-    "html+='<td>'+escapeHtml(device.deviceId)+'</td>';",
+</body>
 
-    "html+='<td>'+escapeHtml(device.code)+'</td>';",
-
-    "if(device.active){",
-
-    "html+='<td><span class=\"badge active\">🟢 ACTIF</span></td>';",
-
-    "}else{",
-
-    "html+='<td><span class=\"badge inactive\">🔴 INACTIF</span></td>';",
-
-    "}",
-
-    "html+='</tr>';",
-
-    "});",
-
-    "html+='</table>';",
-
-    "container.innerHTML=html;",
-
-    "}catch(error){",
-
-    "container.innerHTML='<p>❌ '+escapeHtml(error.message)+'</p>';",
-
-    "}",
-
-    "}",
-
-
-    "async function loadAll(){",
-
-    "await loadUsers();",
-
-    "await loadCodes();",
-
-    "await loadDevices();",
-
-    "}",
-
-
-    "loadAll();",
-
-    "</script>",
-
-    "</body>",
-
-    "</html>"
-
-  ].join("\n");
-
-  res.send(html);
-
+</html>
+  `);
 });
 
+/* =========================
+   ERREURS
+========================= */
 
-// =====================================
-// ERREURS
-// =====================================
-
-app.use(function (err, req, res, next) {
-
+app.use((err, req, res, next) => {
   console.error(err);
 
   res.status(500).json({
-
     success: false,
-
-    message:
-      "Erreur interne du serveur"
-
+    message: "Erreur interne du serveur"
   });
-
 });
 
-
-// =====================================
-// ROUTE 404
-// =====================================
-
-app.use(function (req, res) {
-
+app.use((req, res) => {
   res.status(404).json({
-
     success: false,
-
-    message:
-      "Route introuvable",
-
-    path:
-      req.originalUrl
-
+    message: "Route introuvable",
+    path: req.originalUrl
   });
-
 });
 
-
-// =====================================
-// DÉMARRAGE SERVEUR
-// =====================================
+/* =========================
+   SERVEUR
+========================= */
 
 app.listen(
   PORT,
   "0.0.0.0",
-  function () {
-
+  () => {
     console.log(
       "ARIS IPTV API listening on port " +
       PORT
     );
-
   }
 );
