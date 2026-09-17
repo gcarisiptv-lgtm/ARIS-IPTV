@@ -249,5 +249,5 @@ app.use((err, req, res, next) => {
 
 // Démarrage du serveur
 app.listen(PORT, () => {
-  onsole.log(`ARIS IPTV API listening on port ${PORT});
+  console.log(`ARIS IPTV API listening on port ${PORT});
 });
