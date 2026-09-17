@@ -1,259 +1,659 @@
 const express = require("express");
 const cors = require("cors");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const Database = require("better-sqlite3");
 
 const app = express();
-const db = new Database(process.env.DB_FILE || "aris_iptv.db");
-const PORT = process.env.PORT || 8080;
-const JWT_SECRET = process.env.JWT_SECRET || "CHANGE_THIS_SECRET_IN_PRODUCTION";
+
+const PORT = process.env.PORT || 10000;
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// ARIS IPTV database
-// Username + password are used for customer login.
-db.exec(`
-CREATE TABLE IF NOT EXISTS users(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT UNIQUE NOT NULL,
-  password TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'user',
-  active INTEGER NOT NULL DEFAULT 1,
-  expires_at TEXT
-);
-CREATE TABLE IF NOT EXISTS activation_codes(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  code TEXT UNIQUE NOT NULL,
-  expires_at TEXT,
-  used INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS devices(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
-  device_id TEXT NOT NULL,
-  device_name TEXT,
-  platform TEXT,
-  created_at TEXT NOT NULL,
-  UNIQUE(user_id,device_id),
-  FOREIGN KEY(user_id) REFERENCES users(id)
-);
-CREATE TABLE IF NOT EXISTS dns_servers(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  base_url TEXT NOT NULL,
-  priority INTEGER NOT NULL DEFAULT 100,
-  active INTEGER NOT NULL DEFAULT 1
-);
-`);
+/* =========================================================
+   ARIS IPTV - CONFIGURATION
+   ========================================================= */
 
-// Demo accounts. Change these before production use.
-try {
-  const admin = db.prepare("SELECT id FROM users WHERE username=?").get("admin");
-  if (!admin) {
-    db.prepare("INSERT INTO users(username,password,role,expires_at) VALUES(?,?,?,?)")
-      .run("admin", bcrypt.hashSync("ChangeMe123!", 10), "admin", "2099-12-31");
+const APP_NAME = "ARIS IPTV";
+const APP_VERSION = "1.0.0";
+
+/*
+  Pour la production, définis ces variables dans Render :
+  ADMIN_USERNAME
+  ADMIN_PASSWORD
+*/
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "ChangeMe_ARIS_2026!";
+
+/* =========================================================
+   DONNÉES TEMPORAIRES
+   ========================================================= */
+
+// Utilisateurs de démonstration.
+// Ces données disparaissent lors d'un redémarrage du serveur.
+const users = [
+  {
+    id: 1,
+    username: "demo",
+    password: "demo123",
+    active: true,
+    activationCode: "ARIS-DEMO-2026",
+    expiresAt: "2099-12-31T23:59:59.000Z",
+    maxDevices: 1,
+    devices: []
   }
+];
 
-  const demo = db.prepare("SELECT id FROM users WHERE username=?").get("demo");
-  if (!demo) {
-    db.prepare("INSERT INTO users(username,password,role,expires_at) VALUES(?,?,?,?)")
-      .run("demo", bcrypt.hashSync("Demo123!", 10), "user", "2099-12-31");
+// Codes d'activation disponibles
+const activationCodes = [
+  {
+    code: "ARIS-DEMO-2026",
+    durationDays: 3650,
+    used: true
+  },
+  {
+    code: "ARIS-2026-001",
+    durationDays: 30,
+    used: false
+  },
+  {
+    code: "ARIS-2026-002",
+    durationDays: 90,
+    used: false
+  },
+  {
+    code: "ARIS-2026-003",
+    durationDays: 365,
+    used: false
   }
+];
 
-  const code = db.prepare("SELECT id FROM activation_codes WHERE code=?").get("ARIS-DEMO-2026");
-  if (!code) {
-    db.prepare("INSERT INTO activation_codes(code,expires_at) VALUES(?,?)")
-      .run("ARIS-DEMO-2026", "2099-12-31");
-  }
+/* =========================================================
+   OUTILS
+   ========================================================= */
 
-  if (!db.prepare("SELECT id FROM dns_servers LIMIT 1").get()) {
-    db.prepare("INSERT INTO dns_servers(name,base_url,priority) VALUES(?,?,?)")
-      .run("DNS 1", "https://example-authorized-server.invalid", 1);
-  }
-} catch (e) {
-  console.error("Database initialization error:", e);
+function generateId() {
+  return Date.now() + Math.floor(Math.random() * 10000);
 }
 
-function auth(req, res, next) {
-  try {
-    const header = req.headers.authorization || "";
-    const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-    req.user = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch (e) {
-    res.status(401).json({ error: "unauthorized" });
-  }
+function addDays(date, days) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
 }
 
-function adminOnly(req, res, next) {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "admin_only" });
-  }
-  next();
+function isExpired(user) {
+  if (!user.expiresAt) return false;
+  return new Date(user.expiresAt) < new Date();
 }
 
-app.get("/health", (req, res) => {
-  res.json({ ok: true, service: "ARIS IPTV" });
+function publicUser(user) {
+  return {
+    id: user.id,
+    username: user.username,
+    active: user.active,
+    expired: isExpired(user),
+    expiresAt: user.expiresAt,
+    maxDevices: user.maxDevices,
+    devices: user.devices
+  };
+}
+
+/* =========================================================
+   PAGE D'ACCUEIL
+   ========================================================= */
+
+app.get("/", (req, res) => {
+  res.status(200).send(`
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>${APP_NAME}</title>
+
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #07111f, #102b4c);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .box {
+      width: 90%;
+      max-width: 650px;
+      padding: 45px 25px;
+      border-radius: 22px;
+      background: rgba(255,255,255,0.08);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+      backdrop-filter: blur(10px);
+    }
+
+    h1 {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+
+    .status {
+      display: inline-block;
+      margin: 20px 0;
+      padding: 10px 18px;
+      border-radius: 30px;
+      background: #0f8f4f;
+      font-weight: bold;
+    }
+
+    .info {
+      opacity: 0.85;
+      line-height: 1.7;
+    }
+
+    code {
+      background: rgba(0,0,0,0.3);
+      padding: 5px 8px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="box">
+
+    <h1>ARIS IPTV</h1>
+
+    <div class="status">
+      ● API ONLINE
+    </div>
+
+    <p class="info">
+      Bienvenue sur le serveur ARIS IPTV.
+    </p>
+
+    <p class="info">
+      Version : <strong>${APP_VERSION}</strong>
+    </p>
+
+    <p class="info">
+      API : <code>/api/health</code>
+    </p>
+
+    <p class="info">
+      Connexion : <code>/api/login</code>
+    </p>
+
+  </div>
+
+</body>
+</html>
+  `);
 });
 
-// LOGIN: username + password
-app.post("/api/login", (req, res) => {
-  const username = String(req.body?.username || "").trim();
-  const password = String(req.body?.password || "");
+/* =========================================================
+   TEST API
+   ========================================================= */
 
-  if (!username || !password) {
-    return res.status(400).json({ error: "username_and_password_required" });
-  }
-
-  const user = db.prepare(
-    "SELECT * FROM users WHERE username=? AND active=1"
-  ).get(username);
-
-  if (!user || !bcrypt.compareSync(password, user.password)) {
-    return res.status(401).json({ error: "invalid_credentials" });
-  }
-
-  const token = jwt.sign(
-    { id: user.id, username: user.username, role: user.role },
-    JWT_SECRET,
-    { expiresIn: "30d" }
-  );
-
+app.get("/api/health", (req, res) => {
   res.json({
-    token,
-    user: {
-      id: user.id,
-      username: user.username,
-      role: user.role,
-      expiresAt: user.expires_at
+    success: true,
+    app: APP_NAME,
+    version: APP_VERSION,
+    status: "online",
+    timestamp: new Date().toISOString()
+  });
+});
+
+/* Alias */
+app.get("/health", (req, res) => {
+  res.json({
+    success: true,
+    status: "online"
+  });
+});
+
+/* =========================================================
+   INFORMATIONS APPLICATION
+   ========================================================= */
+
+app.get("/api", (req, res) => {
+  res.json({
+    success: true,
+    name: APP_NAME,
+    version: APP_VERSION,
+    status: "online",
+    endpoints: {
+      login: "POST /api/login",
+      activate: "POST /api/activate",
+      health: "GET /api/health",
+      user: "GET /api/user/:username",
+      devices: "GET /api/devices/:username"
     }
   });
 });
 
-app.post("/api/activate", auth, (req, res) => {
-  const code = String(req.body?.code || "").trim();
-  const deviceId = String(req.body?.deviceId || "").trim();
-  const deviceName = String(req.body?.deviceName || "Android TV");
-  const platform = String(req.body?.platform || "Android TV");
+/* =========================================================
+   CONNEXION UTILISATEUR
+   ========================================================= */
 
-  if (!code) return res.status(400).json({ error: "code_required" });
+app.post("/api/login", (req, res) => {
+  const { username, password } = req.body;
 
-  const activation = db.prepare(
-    "SELECT * FROM activation_codes WHERE code=? AND used=0"
-  ).get(code);
+  if (!username || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Username et password obligatoires."
+    });
+  }
+
+  const user = users.find(
+    u =>
+      u.username.toLowerCase() === String(username).toLowerCase() &&
+      u.password === password
+  );
+
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      message: "Username ou password incorrect."
+    });
+  }
+
+  if (!user.active) {
+    return res.status(403).json({
+      success: false,
+      message: "Compte désactivé."
+    });
+  }
+
+  if (isExpired(user)) {
+    return res.status(403).json({
+      success: false,
+      message: "Votre abonnement est expiré.",
+      expiresAt: user.expiresAt
+    });
+  }
+
+  return res.json({
+    success: true,
+    message: "Connexion réussie.",
+    user: publicUser(user)
+  });
+});
+
+/* =========================================================
+   ACTIVATION PAR CODE
+   ========================================================= */
+
+app.post("/api/activate", (req, res) => {
+  const { username, password, code, deviceId } = req.body;
+
+  if (!username || !password || !code) {
+    return res.status(400).json({
+      success: false,
+      message: "Username, password et code obligatoires."
+    });
+  }
+
+  let user = users.find(
+    u => u.username.toLowerCase() === String(username).toLowerCase()
+  );
+
+  const activation = activationCodes.find(
+    c => c.code.toUpperCase() === String(code).toUpperCase()
+  );
 
   if (!activation) {
-    return res.status(400).json({ error: "invalid_or_used_code" });
+    return res.status(400).json({
+      success: false,
+      message: "Code d'activation invalide."
+    });
   }
 
-  db.prepare("UPDATE activation_codes SET used=1 WHERE id=?").run(activation.id);
-  db.prepare("UPDATE users SET expires_at=? WHERE id=?")
-    .run(activation.expires_at, req.user.id);
+  if (activation.used) {
+    return res.status(400).json({
+      success: false,
+      message: "Ce code d'activation a déjà été utilisé."
+    });
+  }
+
+  if (!user) {
+    user = {
+      id: generateId(),
+      username,
+      password,
+      active: true,
+      activationCode: activation.code,
+      expiresAt: addDays(new Date(), activation.durationDays).toISOString(),
+      maxDevices: 1,
+      devices: []
+    };
+
+    users.push(user);
+  } else {
+    if (user.password !== password) {
+      return res.status(401).json({
+        success: false,
+        message: "Mot de passe incorrect."
+      });
+    }
+
+    user.active = true;
+    user.activationCode = activation.code;
+
+    const currentExpiration = isExpired(user)
+      ? new Date()
+      : new Date(user.expiresAt);
+
+    user.expiresAt = addDays(
+      currentExpiration,
+      activation.durationDays
+    ).toISOString();
+  }
 
   if (deviceId) {
-    db.prepare(
-      "INSERT OR IGNORE INTO devices(user_id,device_id,device_name,platform,created_at) VALUES(?,?,?,?,?)"
-    ).run(req.user.id, deviceId, deviceName, platform, new Date().toISOString());
+    if (!user.devices.includes(deviceId)) {
+      if (user.devices.length >= user.maxDevices) {
+        return res.status(403).json({
+          success: false,
+          message: "Nombre maximum d'appareils atteint."
+        });
+      }
+
+      user.devices.push(deviceId);
+    }
   }
 
-  res.json({ ok: true, expiresAt: activation.expires_at });
-});
+  activation.used = true;
 
-app.get("/api/dns", auth, (req, res) => {
-  const servers = db.prepare(
-    "SELECT id,name,base_url,priority,active FROM dns_servers WHERE active=1 ORDER BY priority"
-  ).all();
-  res.json({ servers });
-});
-
-app.post("/api/devices/register", auth, (req, res) => {
-  const deviceId = String(req.body?.deviceId || "").trim();
-  const deviceName = String(req.body?.deviceName || "Android TV");
-  const platform = String(req.body?.platform || "Android TV");
-
-  if (!deviceId) return res.status(400).json({ error: "device_id_required" });
-
-  const count = db.prepare(
-    "SELECT COUNT(*) AS n FROM devices WHERE user_id=?"
-  ).get(req.user.id).n;
-  const exists = db.prepare(
-    "SELECT id FROM devices WHERE user_id=? AND device_id=?"
-  ).get(req.user.id, deviceId);
-
-  if (!exists && count >= 5) {
-    return res.status(409).json({ error: "device_limit_reached", limit: 5 });
-  }
-
-  db.prepare(
-    "INSERT OR IGNORE INTO devices(user_id,device_id,device_name,platform,created_at) VALUES(?,?,?,?,?)"
-  ).run(req.user.id, deviceId, deviceName, platform, new Date().toISOString());
-
-  res.json({ ok: true });
-});
-
-app.get("/api/devices", auth, (req, res) => {
-  const devices = db.prepare(
-    "SELECT id,device_id,device_name,platform,created_at FROM devices WHERE user_id=? ORDER BY id DESC"
-  ).all(req.user.id);
-  res.json({ devices });
-});
-
-app.get("/api/admin/overview", auth, adminOnly, (req, res) => {
-  res.json({
-    service: "ARIS IPTV",
-    users: db.prepare("SELECT COUNT(*) AS n FROM users WHERE role='user'").get().n,
-    devices: db.prepare("SELECT COUNT(*) AS n FROM devices").get().n,
-    codes: db.prepare("SELECT COUNT(*) AS n FROM activation_codes WHERE used=0").get().n,
-    dns: db.prepare("SELECT COUNT(*) AS n FROM dns_servers WHERE active=1").get().n
+  return res.json({
+    success: true,
+    message: "Activation réussie.",
+    user: publicUser(user)
   });
 });
 
-app.get("/api/admin/users", auth, adminOnly, (req, res) => {
-  const users = db.prepare(
-    "SELECT id,username,role,active,expires_at FROM users ORDER BY id DESC"
-  ).all();
-  res.json({ users });
-});
+/* =========================================================
+   INFORMATIONS UTILISATEUR
+   ========================================================= */
 
-app.get("/api/admin/dns", auth, adminOnly, (req, res) => {
+app.get("/api/user/:username", (req, res) => {
+  const user = users.find(
+    u => u.username.toLowerCase() === req.params.username.toLowerCase()
+  );
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: "Utilisateur introuvable."
+    });
+  }
+
   res.json({
-    servers: db.prepare("SELECT * FROM dns_servers ORDER BY priority").all()
+    success: true,
+    user: publicUser(user)
   });
 });
 
-app.post("/api/admin/dns", auth, adminOnly, (req, res) => {
-  const name = String(req.body?.name || "").trim();
-  const baseUrl = String(req.body?.baseUrl || "").trim();
-  const priority = Number(req.body?.priority ?? 100);
+/* =========================================================
+   APPAREILS
+   ========================================================= */
 
-  if (!name || !baseUrl) {
-    return res.status(400).json({ error: "name_and_base_url_required" });
+app.get("/api/devices/:username", (req, res) => {
+  const user = users.find(
+    u => u.username.toLowerCase() === req.params.username.toLowerCase()
+  );
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: "Utilisateur introuvable."
+    });
   }
 
-  const info = db.prepare(
-    "INSERT INTO dns_servers(name,base_url,priority) VALUES(?,?,?)"
-  ).run(name, baseUrl, Number.isFinite(priority) ? priority : 100);
-
-  res.json({ id: info.lastInsertRowid });
+  res.json({
+    success: true,
+    username: user.username,
+    maxDevices: user.maxDevices,
+    devices: user.devices
+  });
 });
 
-app.post("/api/admin/codes", auth, adminOnly, (req, res) => {
-  const code = String(req.body?.code || "").trim();
-  const expiresAt = String(req.body?.expiresAt || "2099-12-31");
+/* Ajouter un appareil */
+app.post("/api/devices", (req, res) => {
+  const { username, deviceId } = req.body;
 
-  if (!code) return res.status(400).json({ error: "code_required" });
-
-  try {
-    db.prepare("INSERT INTO activation_codes(code,expires_at) VALUES(?,?)")
-      .run(code, expiresAt);
-    res.json({ ok: true, code, expiresAt });
-  } catch (e) {
-    res.status(409).json({ error: "code_already_exists" });
+  if (!username || !deviceId) {
+    return res.status(400).json({
+      success: false,
+      message: "Username et deviceId obligatoires."
+    });
   }
+
+  const user = users.find(
+    u => u.username.toLowerCase() === username.toLowerCase()
+  );
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: "Utilisateur introuvable."
+    });
+  }
+
+  if (user.devices.includes(deviceId)) {
+    return res.json({
+      success: true,
+      message: "Appareil déjà enregistré.",
+      devices: user.devices
+    });
+  }
+
+  if (user.devices.length >= user.maxDevices) {
+    return res.status(403).json({
+      success: false,
+      message: "Nombre maximum d'appareils atteint."
+    });
+  }
+
+  user.devices.push(deviceId);
+
+  res.json({
+    success: true,
+    message: "Appareil ajouté.",
+    devices: user.devices
+  });
 });
 
-app.listen(PORT, () => {
-  console.log(`ARIS IPTV API listening on port ${PORT}`);
+/* Supprimer un appareil */
+app.delete("/api/devices", (req, res) => {
+  const { username, deviceId } = req.body;
+
+  const user = users.find(
+    u => u.username.toLowerCase() === String(username).toLowerCase()
+  );
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: "Utilisateur introuvable."
+    });
+  }
+
+  user.devices = user.devices.filter(id => id !== deviceId);
+
+  res.json({
+    success: true,
+    message: "Appareil supprimé.",
+    devices: user.devices
+  });
+});
+
+/* =========================================================
+   ADMIN - CONNEXION
+   ========================================================= */
+
+app.post("/api/admin/login", (req, res) => {
+  const { username, password } = req.body;
+
+  if (
+    username !== ADMIN_USERNAME ||
+    password !== ADMIN_PASSWORD
+  ) {
+    return res.status(401).json({
+      success: false,
+      message: "Identifiants administrateur incorrects."
+    });
+  }
+
+  res.json({
+    success: true,
+    message: "Connexion administrateur réussie.",
+    admin: {
+      username: ADMIN_USERNAME
+    }
+  });
+});
+
+/* =========================================================
+   ADMIN - LISTE UTILISATEURS
+   ========================================================= */
+
+app.get("/api/admin/users", (req, res) => {
+  res.json({
+    success: true,
+    count: users.length,
+    users: users.map(publicUser)
+  });
+});
+
+/* =========================================================
+   ADMIN - CRÉER UN CODE
+   ========================================================= */
+
+app.post("/api/admin/codes", (req, res) => {
+  const { code, durationDays } = req.body;
+
+  if (!code || !durationDays) {
+    return res.status(400).json({
+      success: false,
+      message: "Code et durée obligatoires."
+    });
+  }
+
+  const existing = activationCodes.find(
+    c => c.code.toUpperCase() === String(code).toUpperCase()
+  );
+
+  if (existing) {
+    return res.status(409).json({
+      success: false,
+      message: "Ce code existe déjà."
+    });
+  }
+
+  const newCode = {
+    code: String(code).toUpperCase(),
+    durationDays: Number(durationDays),
+    used: false
+  };
+
+  activationCodes.push(newCode);
+
+  res.json({
+    success: true,
+    message: "Code créé.",
+    code: newCode
+  });
+});
+
+/* =========================================================
+   ADMIN - LISTE DES CODES
+   ========================================================= */
+
+app.get("/api/admin/codes", (req, res) => {
+  res.json({
+    success: true,
+    codes: activationCodes
+  });
+});
+
+/* =========================================================
+   ADMIN - DÉSACTIVER UTILISATEUR
+   ========================================================= */
+
+app.post("/api/admin/users/:username/disable", (req, res) => {
+  const user = users.find(
+    u => u.username.toLowerCase() === req.params.username.toLowerCase()
+  );
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: "Utilisateur introuvable."
+    });
+  }
+
+  user.active = false;
+
+  res.json({
+    success: true,
+    message: "Utilisateur désactivé.",
+    user: publicUser(user)
+  });
+});
+
+/* =========================================================
+   ADMIN - ACTIVER UTILISATEUR
+   ========================================================= */
+
+app.post("/api/admin/users/:username/enable", (req, res) => {
+  const user = users.find(
+    u => u.username.toLowerCase() === req.params.username.toLowerCase()
+  );
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: "Utilisateur introuvable."
+    });
+  }
+
+  user.active = true;
+
+  res.json({
+    success: true,
+    message: "Utilisateur activé.",
+    user: publicUser(user)
+  });
+});
+
+/* =========================================================
+   ERREUR 404
+   ========================================================= */
+
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Route introuvable.",
+    path: req.originalUrl
+  });
+});
+
+/* =========================================================
+   DÉMARRAGE SERVEUR
+   ========================================================= */
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(
+    ${APP_NAME} API listening on port ${PORT}
+  );
+  console.log(
+    ${APP_NAME} version ${APP_VERSION}
+  );
 });
