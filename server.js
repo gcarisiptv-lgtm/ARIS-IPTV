@@ -4,180 +4,410 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// ===============================
+// CONFIGURATION
+// ===============================
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Page d'accueil
-app.get("/", (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="fr">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>ARIS IPTV</title>
-      <style>
-        body {
-          margin: 0;
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: linear-gradient(135deg, #06142e, #0b3d91);
-          font-family: Arial, sans-serif;
-          color: white;
-        }
+// Autoriser les requêtes depuis l'application Android
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, OPTIONS"
+  );
 
-        .box {
-          width: 90%;
-          max-width: 420px;
-          padding: 35px;
-          text-align: center;
-          background: rgba(0,0,0,0.35);
-          border-radius: 20px;
-          box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-        }
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
 
-        h1 {
-          font-size: 42px;
-          margin-bottom: 10px;
-        }
-
-        p {
-          color: #ddd;
-          margin-bottom: 30px;
-        }
-
-        input {
-          width: 100%;
-          box-sizing: border-box;
-          padding: 14px;
-          margin: 8px 0;
-          border: none;
-          border-radius: 10px;
-          font-size: 16px;
-        }
-
-        button {
-          width: 100%;
-          padding: 14px;
-          margin-top: 15px;
-          border: none;
-          border-radius: 10px;
-          background: #d4af37;
-          color: #111;
-          font-size: 17px;
-          font-weight: bold;
-          cursor: pointer;
-        }
-
-        button:hover {
-          background: #f0c94b;
-        }
-
-        #message {
-          margin-top: 20px;
-          min-height: 20px;
-        }
-      </style>
-    </head>
-
-    <body>
-      <div class="box">
-        <h1>ARIS IPTV</h1>
-        <p>Connexion à votre espace IPTV</p>
-
-        <input
-          id="username"
-          type="text"
-          placeholder="Username"
-        >
-
-        <input
-          id="password"
-          type="password"
-          placeholder="Password"
-        >
-
-        <button onclick="login()">CONNEXION</button>
-
-        <div id="message"></div>
-      </div>
-
-      <script>
-        async function login() {
-          const username = document.getElementById("username").value;
-          const password = document.getElementById("password").value;
-          const message = document.getElementById("message");
-
-          if (!username || !password) {
-            message.innerHTML = "Veuillez remplir tous les champs.";
-            return;
-          }
-
-          try {
-            const response = await fetch("/api/login", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                username: username,
-                password: password
-              })
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-              message.innerHTML = "Connexion réussie.";
-              localStorage.setItem("aris_token", data.token);
-            } else {
-              message.innerHTML = data.message || "Identifiants incorrects.";
-            }
-
-          } catch (error) {
-            message.innerHTML = "Erreur de connexion au serveur.";
-          }
-        }
-      </script>
-    </body>
-    </html>
-  `);
+  next();
 });
 
-// Test API
-app.get("/api/status", (req, res) => {
+// ===============================
+// FICHIERS WEB
+// ===============================
+
+app.use(express.static(path.join(__dirname)));
+
+// ===============================
+// DONNÉES TEMPORAIRES
+// ===============================
+
+const users = [
+  {
+    id: 1,
+    username: "admin",
+    password: "admin123",
+    active: true
+  }
+];
+
+const activationCodes = [
+  {
+    code: "ARIS-2026",
+    active: true,
+    device: null
+  }
+];
+
+const devices = [];
+
+// ===============================
+// ROUTE PRINCIPALE
+// ===============================
+
+app.get("/", (req, res) => {
+  const indexPath = path.join(__dirname, "index.html");
+
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      res.send(`
+        <!DOCTYPE html>
+        <html lang="fr">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>ARIS IPTV</title>
+          <style>
+            body {
+              margin: 0;
+              background: #07111f;
+              color: white;
+              font-family: Arial, sans-serif;
+              text-align: center;
+            }
+
+            .box {
+              max-width: 600px;
+              margin: 100px auto;
+              padding: 40px;
+            }
+
+            h1 {
+              font-size: 42px;
+              margin-bottom: 10px;
+            }
+
+            p {
+              color: #b9c3d0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            <h1>ARIS IPTV</h1>
+            <p>Serveur API opérationnel</p>
+            <p>Bienvenue sur ARIS IPTV PRO</p>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+  });
+});
+
+// ===============================
+// TEST API
+// ===============================
+
+app.get("/api", (req, res) => {
   res.json({
     success: true,
-    app: "ARIS IPTV",
+    name: "ARIS IPTV",
+    message: "ARIS IPTV API fonctionne correctement",
     status: "online"
   });
 });
 
-// Connexion
-app.post("/api/login", (req, res) => {
-  const { username, password } = req.body;
+// ===============================
+// STATUT DU SERVEUR
+// ===============================
 
-  // Identifiants de test
-  const USERNAME = process.env.ADMIN_USERNAME || "admin";
-  const PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
-
-  if (username === USERNAME && password === PASSWORD) {
-    return res.json({
-      success: true,
-      message: "Connexion réussie",
-      token: "ARIS-" + Date.now()
-    });
-  }
-
-  return res.status(401).json({
-    success: false,
-    message: "Username ou password incorrect."
+app.get("/api/status", (req, res) => {
+  res.json({
+    success: true,
+    status: "online",
+    server: "ARIS IPTV PRO",
+    time: new Date().toISOString()
   });
 });
 
-// Page admin
+// ===============================
+// CONNEXION UTILISATEUR
+// ===============================
+
+app.post("/api/login", (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Username et password obligatoires"
+    });
+  }
+
+  const user = users.find(
+    (u) =>
+      u.username === username &&
+      u.password === password &&
+      u.active === true
+  );
+
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      message: "Identifiants incorrects"
+    });
+  }
+
+  res.json({
+    success: true,
+    message: "Connexion réussie",
+    user: {
+      id: user.id,
+      username: user.username
+    }
+  });
+});
+
+// ===============================
+// ACTIVATION PAR CODE
+// ===============================
+
+app.post("/api/activate", (req, res) => {
+  const { code, deviceId } = req.body;
+
+  if (!code) {
+    return res.status(400).json({
+      success: false,
+      message: "Code d'activation obligatoire"
+    });
+  }
+
+  const activation = activationCodes.find(
+    (item) => item.code === code && item.active === true
+  );
+
+  if (!activation) {
+    return res.status(401).json({
+      success: false,
+      message: "Code d'activation invalide"
+    });
+  }
+
+  if (activation.device && activation.device !== deviceId) {
+    return res.status(403).json({
+      success: false,
+      message: "Ce code est déjà utilisé sur un autre appareil"
+    });
+  }
+
+  if (deviceId) {
+    activation.device = deviceId;
+
+    const existingDevice = devices.find(
+      (device) => device.deviceId === deviceId
+    );
+
+    if (!existingDevice) {
+      devices.push({
+        deviceId: deviceId,
+        code: code,
+        active: true,
+        activatedAt: new Date().toISOString()
+      });
+    }
+  }
+
+  res.json({
+    success: true,
+    message: "Appareil activé avec succès",
+    code: code,
+    deviceId: deviceId || null
+  });
+});
+
+// ===============================
+// VÉRIFICATION DU CODE
+// ===============================
+
+app.post("/api/check-code", (req, res) => {
+  const { code } = req.body;
+
+  const activation = activationCodes.find(
+    (item) => item.code === code && item.active === true
+  );
+
+  if (!activation) {
+    return res.json({
+      success: false,
+      valid: false,
+      message: "Code invalide"
+    });
+  }
+
+  res.json({
+    success: true,
+    valid: true,
+    message: "Code valide"
+  });
+});
+
+// ===============================
+// LISTE DES UTILISATEURS
+// ===============================
+
+app.get("/api/users", (req, res) => {
+  res.json({
+    success: true,
+    users: users.map((user) => ({
+      id: user.id,
+      username: user.username,
+      active: user.active
+    }))
+  });
+});
+
+// ===============================
+// AJOUT UTILISATEUR
+// ===============================
+
+app.post("/api/users", (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Username et password obligatoires"
+    });
+  }
+
+  const existing = users.find((user) => user.username === username);
+
+  if (existing) {
+    return res.status(409).json({
+      success: false,
+      message: "Utilisateur déjà existant"
+    });
+  }
+
+  const newUser = {
+    id: users.length + 1,
+    username,
+    password,
+    active: true
+  };
+
+  users.push(newUser);
+
+  res.json({
+    success: true,
+    message: "Utilisateur créé",
+    user: {
+      id: newUser.id,
+      username: newUser.username,
+      active: newUser.active
+    }
+  });
+});
+
+// ===============================
+// LISTE DES CODES
+// ===============================
+
+app.get("/api/codes", (req, res) => {
+  res.json({
+    success: true,
+    codes: activationCodes
+  });
+});
+
+// ===============================
+// CRÉER UN CODE
+// ===============================
+
+app.post("/api/codes", (req, res) => {
+  const { code } = req.body;
+
+  if (!code) {
+    return res.status(400).json({
+      success: false,
+      message: "Code obligatoire"
+    });
+  }
+
+  const existing = activationCodes.find(
+    (item) => item.code === code
+  );
+
+  if (existing) {
+    return res.status(409).json({
+      success: false,
+      message: "Ce code existe déjà"
+    });
+  }
+
+  activationCodes.push({
+    code,
+    active: true,
+    device: null
+  });
+
+  res.json({
+    success: true,
+    message: "Code créé avec succès",
+    code
+  });
+});
+
+// ===============================
+// LISTE DES APPAREILS
+// ===============================
+
+app.get("/api/devices", (req, res) => {
+  res.json({
+    success: true,
+    devices
+  });
+});
+
+// ===============================
+// DÉSACTIVER UN APPAREIL
+// ===============================
+
+app.post("/api/devices/deactivate", (req, res) => {
+  const { deviceId } = req.body;
+
+  const device = devices.find(
+    (item) => item.deviceId === deviceId
+  );
+
+  if (!device) {
+    return res.status(404).json({
+      success: false,
+      message: "Appareil introuvable"
+    });
+  }
+
+  device.active = false;
+
+  res.json({
+    success: true,
+    message: "Appareil désactivé"
+  });
+});
+
+// ===============================
+// PAGE ADMIN
+// ===============================
+
 app.get("/admin", (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -185,59 +415,87 @@ app.get("/admin", (req, res) => {
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
       <title>ARIS IPTV - Administration</title>
+
       <style>
         body {
           margin: 0;
-          padding: 30px;
-          background: #07152f;
+          background: #07111f;
           color: white;
           font-family: Arial, sans-serif;
         }
 
-        .container {
-          max-width: 900px;
-          margin: auto;
+        header {
+          padding: 25px;
+          text-align: center;
+          background: #0d1b2a;
         }
 
         h1 {
-          color: #d4af37;
+          margin: 0;
+        }
+
+        .container {
+          max-width: 1000px;
+          margin: 30px auto;
+          padding: 20px;
         }
 
         .card {
-          margin-top: 20px;
+          background: #102235;
           padding: 25px;
-          background: #10254a;
-          border-radius: 15px;
+          margin-bottom: 20px;
+          border-radius: 12px;
+        }
+
+        .number {
+          font-size: 32px;
+          font-weight: bold;
         }
       </style>
     </head>
 
     <body>
+
+      <header>
+        <h1>ARIS IPTV</h1>
+        <p>Administration</p>
+      </header>
+
       <div class="container">
-        <h1>ARIS IPTV — Administration</h1>
-
-        <div class="card">
-          <h2>Serveur</h2>
-          <p>Statut : <strong>EN LIGNE</strong></p>
-        </div>
-
-        <div class="card">
-          <h2>API</h2>
-          <p>Endpoint : /api/status</p>
-        </div>
 
         <div class="card">
           <h2>Utilisateurs</h2>
-          <p>Gestion des utilisateurs disponible dans la prochaine étape.</p>
+          <div class="number">${users.length}</div>
         </div>
+
+        <div class="card">
+          <h2>Codes d'activation</h2>
+          <div class="number">${activationCodes.length}</div>
+        </div>
+
+        <div class="card">
+          <h2>Appareils</h2>
+          <div class="number">${devices.length}</div>
+        </div>
+
+        <div class="card">
+          <h2>État du serveur</h2>
+          <p>🟢 Serveur ARIS IPTV opérationnel</p>
+        </div>
+
       </div>
+
     </body>
     </html>
   `);
 });
 
-// Gestion des erreurs
+// ===============================
+// GESTION DES ERREURS
+// ===============================
+
 app.use((err, req, res, next) => {
   console.error(err);
 
@@ -247,7 +505,22 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Démarrage du serveur
-app.listen(PORT, () => {
-  console.log(`ARIS IPTV API listening on port ${PORT});
+// ===============================
+// ROUTE 404
+// ===============================
+
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Route introuvable",
+    path: req.originalUrl
+  });
+});
+
+// ===============================
+// DÉMARRAGE DU SERVEUR
+// ===============================
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`ARIS IPTV API listening on port ${PORT}`);
 });
